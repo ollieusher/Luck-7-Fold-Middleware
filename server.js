@@ -22,7 +22,7 @@ const TTL_SECONDS = {
   fixturesBetween: 30 * 60,
   teamSchedules: 24 * 60 * 60,
   headToHead: 24 * 60 * 60,
-  results: 5 * 60
+  results: 3 * 60
 };
 
 function buildSportmonksUrl(path, queryParams = {}) {

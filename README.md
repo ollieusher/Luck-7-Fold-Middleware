@@ -67,7 +67,7 @@ Use `http://localhost:3000` as the base URL locally.
   curl "http://localhost:3000/h2h/85/53"
   ```
 
-- `GET /results/:date` (cache: 5m)
+- `GET /results/:date` (cache: 3m)
 
   ```bash
   curl "http://localhost:3000/results/2026-04-27"
