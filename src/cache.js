@@ -6,7 +6,7 @@ class TtlCache {
       this.deleteExpired();
     }, this.cleanupIntervalMs);
 
-    // Do not keep the Node process alive just for cache cleanup.
+    // Do not keep the Node process alive only for cache cleanup.
     if (typeof this.cleanupTimer.unref === "function") {
       this.cleanupTimer.unref();
     }
