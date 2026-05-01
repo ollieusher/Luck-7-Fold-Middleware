@@ -87,7 +87,7 @@ async function getSchedulesByTeam(teamId) {
 async function getHeadToHead(homeId, awayId) {
   return requestSportmonks(
     `/football/fixtures/head-to-head/${homeId}/${awayId}`,
-    { per_page: 5 },
+    { include: "participants", per_page: 5 },
     { ttlSeconds: config.cacheTtls.fixtureCore }
   );
 }
