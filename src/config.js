@@ -4,9 +4,9 @@ const path = require("path");
 const DEFAULTS = {
   PORT: 3000,
   SPORTMONKS_BASE_URL: "https://api.sportmonks.com/v3",
-  PREDICTIONS_TTL_SECONDS: 60 * 60 * 12,
+  PREDICTIONS_TTL_SECONDS: 60 * 5,
   ODDS_TTL_SECONDS: 60 * 5,
-  FIXTURE_CORE_TTL_SECONDS: 60 * 15
+  FIXTURE_CORE_TTL_SECONDS: 60 * 5
 };
 
 function loadEnvFile() {
