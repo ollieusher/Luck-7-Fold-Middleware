@@ -39,86 +39,41 @@ async function requestSportmonks(path, query, cachePolicy) {
   return { payload, cache: "MISS", source: "sportmonks" };
 }
 
-function toSimpleFixture(item) {
-  return {
-    id: item.id,
-    starting_at: item.starting_at,
-    league: item.league || null,
-    participants: item.participants || [],
-    state: item.state || null,
-    scores: item.scores || [],
-    predictions: item.predictions || [],
-    odds: item.odds || []
-  };
-}
-
 async function getFixturesByDate(date) {
   const include = "participants;league;odds";
-  const result = await requestSportmonks(
+  return requestSportmonks(
     `/football/fixtures/date/${date}`,
     { include, per_page: 50 },
     { ttlSeconds: config.cacheTtls.fixtureCore }
   );
-
-  return {
-    ...result,
-    payload: {
-      date,
-      fixtures: (result.payload.data || []).map(toSimpleFixture)
-    }
-  };
 }
 
 async function getFixturesMulti(ids) {
   const include = "participants;league;predictions.type;odds";
-  const result = await requestSportmonks(
+  return requestSportmonks(
     `/football/fixtures/multi/${ids.join(",")}`,
     { include, per_page: 50 },
     { ttlSeconds: config.cacheTtls.odds }
   );
-
-  return {
-    ...result,
-    payload: {
-      fixtures: (result.payload.data || []).map(toSimpleFixture)
-    }
-  };
 }
 
 async function getValueBets(from, to) {
   const include = "participants;league;predictions.type;odds";
   const filters = "predictionTypes:33";
-  const result = await requestSportmonks(
+  return requestSportmonks(
     `/football/fixtures/between/${from}/${to}`,
     { include, filters, per_page: 25 },
     { ttlSeconds: config.cacheTtls.predictions }
   );
-
-  return {
-    ...result,
-    payload: {
-      from,
-      to,
-      fixtures: (result.payload.data || []).map(toSimpleFixture)
-    }
-  };
 }
 
 async function getResultsByDate(date) {
   const include = "participants;scores;state";
-  const result = await requestSportmonks(
+  return requestSportmonks(
     `/football/fixtures/date/${date}`,
     { include, per_page: 50 },
     { ttlSeconds: config.cacheTtls.fixtureCore }
   );
-
-  return {
-    ...result,
-    payload: {
-      date,
-      fixtures: (result.payload.data || []).map(toSimpleFixture)
-    }
-  };
 }
 
 async function getSchedulesByTeam(teamId) {
