@@ -5,7 +5,9 @@ const {
   getFixturesByDate,
   getFixturesMulti,
   getValueBets,
-  getResultsByDate
+  getResultsByDate,
+  getSchedulesByTeam,
+  getHeadToHead
 } = require("./sportmonksClient");
 
 function sendJson(res, statusCode, payload, cacheStatus) {
@@ -17,11 +19,12 @@ function sendJson(res, statusCode, payload, cacheStatus) {
   res.end(JSON.stringify(payload));
 }
 
-function parseDateShift(daysToAdd) {
-  const date = new Date();
-  date.setUTCHours(0, 0, 0, 0);
-  date.setUTCDate(date.getUTCDate() + daysToAdd);
-  return date.toISOString().slice(0, 10);
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isNumericId(value) {
+  return /^\d+$/.test(value);
 }
 
 async function handler(req, res) {
@@ -30,61 +33,71 @@ async function handler(req, res) {
   }
 
   const requestUrl = new URL(req.url, `http://${req.headers.host}`);
-  const { pathname, searchParams } = requestUrl;
+  const { pathname } = requestUrl;
 
   try {
     if (req.method === "GET" && pathname === "/health") {
-      return sendJson(res, 200, { ok: true });
+      return sendJson(res, 200, { status: "ok" });
     }
 
-    if (req.method === "GET" && pathname === "/api/fixtures/upcoming") {
-      const dates = [parseDateShift(0), parseDateShift(1), parseDateShift(2)];
-      const results = await Promise.all(dates.map((date) => getFixturesByDate(date)));
-      const cacheHeader = results.map((x) => x.cache).join(",");
-      return sendJson(
-        res,
-        200,
-        {
-          dates,
-          fixturesByDate: results.map((r) => r.payload)
-        },
-        cacheHeader
-      );
+    if (req.method === "GET" && pathname.startsWith("/fixtures/date/")) {
+      const date = pathname.slice("/fixtures/date/".length);
+      if (!isIsoDate(date)) {
+        return sendJson(res, 400, { error: "Invalid date format, expected YYYY-MM-DD" });
+      }
+      const result = await getFixturesByDate(date);
+      return sendJson(res, 200, result.payload, result.cache);
     }
 
-    if (req.method === "GET" && pathname === "/api/fixtures/details") {
-      const idsRaw = searchParams.get("ids") || "";
-      const ids = idsRaw
+    if (req.method === "GET" && pathname.startsWith("/fixtures/multi/")) {
+      const ids = pathname
+        .slice("/fixtures/multi/".length)
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
-
       if (ids.length === 0 || ids.length > 50) {
-        return sendJson(res, 400, {
-          error: "Provide ids query param with 1-50 comma-separated fixture ids"
-        });
+        return sendJson(res, 400, { error: "Provide 1-50 comma-separated fixture IDs" });
       }
-
       const result = await getFixturesMulti(ids);
       return sendJson(res, 200, result.payload, result.cache);
     }
 
-    if (req.method === "GET" && pathname === "/api/value-bets") {
-      const from = searchParams.get("from");
-      const to = searchParams.get("to");
-
-      if (!from || !to) {
-        return sendJson(res, 400, {
-          error: "from and to query params are required (YYYY-MM-DD)"
-        });
+    if (req.method === "GET" && pathname.startsWith("/fixtures/between/")) {
+      const parts = pathname.split("/");
+      const from = parts[3];
+      const to = parts[4];
+      if (!isIsoDate(from) || !isIsoDate(to)) {
+        return sendJson(res, 400, { error: "Invalid date format, expected YYYY-MM-DD" });
       }
-
       const result = await getValueBets(from, to);
       return sendJson(res, 200, result.payload, result.cache);
     }
 
-    if (req.method === "GET" && pathname === "/api/results/today") {
-      const date = searchParams.get("date") || parseDateShift(0);
+    if (req.method === "GET" && pathname.startsWith("/schedules/teams/")) {
+      const teamId = pathname.slice("/schedules/teams/".length);
+      if (!isNumericId(teamId)) {
+        return sendJson(res, 400, { error: "teamId must be numeric" });
+      }
+      const result = await getSchedulesByTeam(teamId);
+      return sendJson(res, 200, result.payload, result.cache);
+    }
+
+    if (req.method === "GET" && pathname.startsWith("/h2h/")) {
+      const parts = pathname.split("/");
+      const homeId = parts[2];
+      const awayId = parts[3];
+      if (!isNumericId(homeId) || !isNumericId(awayId)) {
+        return sendJson(res, 400, { error: "homeId and awayId must be numeric" });
+      }
+      const result = await getHeadToHead(homeId, awayId);
+      return sendJson(res, 200, result.payload, result.cache);
+    }
+
+    if (req.method === "GET" && pathname.startsWith("/results/")) {
+      const date = pathname.slice("/results/".length);
+      if (!isIsoDate(date)) {
+        return sendJson(res, 400, { error: "Invalid date format, expected YYYY-MM-DD" });
+      }
       const result = await getResultsByDate(date);
       return sendJson(res, 200, result.payload, result.cache);
     }

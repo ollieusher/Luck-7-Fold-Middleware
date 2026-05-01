@@ -56,7 +56,7 @@ async function getFixturesByDate(date) {
   const include = "participants;league;odds";
   const result = await requestSportmonks(
     `/football/fixtures/date/${date}`,
-    { include },
+    { include, per_page: 50 },
     { ttlSeconds: config.cacheTtls.fixtureCore }
   );
 
@@ -73,7 +73,7 @@ async function getFixturesMulti(ids) {
   const include = "participants;league;predictions.type;odds";
   const result = await requestSportmonks(
     `/football/fixtures/multi/${ids.join(",")}`,
-    { include },
+    { include, per_page: 50 },
     { ttlSeconds: config.cacheTtls.odds }
   );
 
@@ -90,7 +90,7 @@ async function getValueBets(from, to) {
   const filters = "predictionTypes:33";
   const result = await requestSportmonks(
     `/football/fixtures/between/${from}/${to}`,
-    { include, filters },
+    { include, filters, per_page: 25 },
     { ttlSeconds: config.cacheTtls.predictions }
   );
 
@@ -108,7 +108,7 @@ async function getResultsByDate(date) {
   const include = "participants;scores;state";
   const result = await requestSportmonks(
     `/football/fixtures/date/${date}`,
-    { include },
+    { include, per_page: 50 },
     { ttlSeconds: config.cacheTtls.fixtureCore }
   );
 
@@ -121,9 +121,27 @@ async function getResultsByDate(date) {
   };
 }
 
+async function getSchedulesByTeam(teamId) {
+  return requestSportmonks(
+    `/football/schedules/teams/${teamId}`,
+    {},
+    { ttlSeconds: config.cacheTtls.fixtureCore }
+  );
+}
+
+async function getHeadToHead(homeId, awayId) {
+  return requestSportmonks(
+    `/football/fixtures/head-to-head/${homeId}/${awayId}`,
+    { per_page: 5 },
+    { ttlSeconds: config.cacheTtls.fixtureCore }
+  );
+}
+
 module.exports = {
   getFixturesByDate,
   getFixturesMulti,
   getValueBets,
-  getResultsByDate
+  getResultsByDate,
+  getSchedulesByTeam,
+  getHeadToHead
 };
