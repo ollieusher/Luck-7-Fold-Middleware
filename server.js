@@ -22,7 +22,8 @@ const TTL_SECONDS = {
   fixturesBetween: 30 * 60,
   teamSchedules: 24 * 60 * 60,
   headToHead: 24 * 60 * 60,
-  results: 3 * 60
+  results: 3 * 60,
+  liveScores: 60
 };
 
 function buildSportmonksUrl(path, queryParams = {}) {
@@ -95,6 +96,21 @@ function validateIds(idsParam) {
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/livescores", async (_req, res, next) => {
+  try {
+    const result = await fetchWithCache({
+      path: "/livescores/inplay",
+      queryParams: {
+        include: "participants;scores;league"
+      },
+      ttlSeconds: TTL_SECONDS.liveScores
+    });
+    return sendProxyResponse(res, result);
+  } catch (error) {
+    return next(error);
+  }
 });
 
 app.get("/fixtures/date/:date", async (req, res, next) => {
