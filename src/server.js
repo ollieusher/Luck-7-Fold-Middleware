@@ -7,7 +7,8 @@ const {
   getValueBets,
   getResultsByDate,
   getSchedulesByTeam,
-  getHeadToHead
+  getHeadToHead,
+  getLiveScores
 } = require("./sportmonksClient");
 
 function sendJson(res, statusCode, payload, cacheStatus) {
@@ -99,6 +100,11 @@ async function handler(req, res) {
         return sendJson(res, 400, { error: "Invalid date format, expected YYYY-MM-DD" });
       }
       const result = await getResultsByDate(date);
+      return sendJson(res, 200, result.payload, result.cache);
+    }
+
+    if (req.method === "GET" && pathname === "/livescores") {
+      const result = await getLiveScores();
       return sendJson(res, 200, result.payload, result.cache);
     }
 

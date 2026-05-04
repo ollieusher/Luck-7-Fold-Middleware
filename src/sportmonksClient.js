@@ -92,11 +92,21 @@ async function getHeadToHead(homeId, awayId) {
   );
 }
 
+async function getLiveScores() {
+  const include = "participants;scores;league";
+  return requestSportmonks(
+    `/football/livescores/inplay`,
+    { include },
+    { ttlSeconds: 60 }
+  );
+}
+
 module.exports = {
   getFixturesByDate,
   getFixturesMulti,
   getValueBets,
   getResultsByDate,
   getSchedulesByTeam,
-  getHeadToHead
+  getHeadToHead,
+  getLiveScores
 };
