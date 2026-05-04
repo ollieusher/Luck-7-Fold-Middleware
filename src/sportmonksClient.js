@@ -49,7 +49,7 @@ async function getFixturesByDate(date) {
 }
 
 async function getFixturesMulti(ids) {
-  const include = "participants;league;predictions.type;odds;scores";
+  const include = "participants;league;predictions.type;odds;scores;state";
   return requestSportmonks(
     `/football/fixtures/multi/${ids.join(",")}`,
     { include, per_page: 50 },
