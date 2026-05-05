@@ -63,6 +63,15 @@ async function handler(req, res) {
       return sendJson(res, 200, result.payload, result.cache);
     }
 
+    if (req.method === "GET" && pathname.startsWith("/fixtures/result/")) {
+      const fixtureId = pathname.slice("/fixtures/result/".length);
+      if (!isNumericId(fixtureId)) {
+        return sendJson(res, 400, { error: "fixtureId must be numeric" });
+      }
+      const result = await getFixturesMulti([fixtureId]);
+      return sendJson(res, 200, result.payload, result.cache);
+    }
+
     if (req.method === "GET" && pathname.startsWith("/fixtures/between/")) {
       const parts = pathname.split("/");
       const from = parts[3];
