@@ -94,6 +94,10 @@ function validateIds(idsParam) {
     .filter(Boolean);
 }
 
+function isNumericId(value) {
+  return /^\d+$/.test(value);
+}
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -149,6 +153,26 @@ app.get("/fixtures/multi/:ids", async (req, res, next) => {
         per_page: 50
       },
       ttlSeconds: TTL_SECONDS.fixturesMulti
+    });
+    return sendProxyResponse(res, result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get("/fixtures/result/:id", async (req, res, next) => {
+  const { id } = req.params;
+  if (!isNumericId(id)) {
+    return res.status(400).json({ error: "id must be numeric" });
+  }
+
+  try {
+    const result = await fetchWithCache({
+      path: `/fixtures/${id}`,
+      queryParams: {
+        include: "participants;scores;state"
+      },
+      ttlSeconds: 60
     });
     return sendProxyResponse(res, result);
   } catch (error) {
