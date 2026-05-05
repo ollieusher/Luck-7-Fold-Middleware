@@ -36,6 +36,7 @@ async function handler(req, res) {
 
   const requestUrl = new URL(req.url, `http://${req.headers.host}`);
   const { pathname } = requestUrl;
+  console.log(`Incoming: ${req.method} ${pathname}`);
 
   try {
     if (req.method === "GET" && pathname === "/health") {
@@ -51,6 +52,15 @@ async function handler(req, res) {
       return sendJson(res, 200, result.payload, result.cache);
     }
 
+    if (req.method === "GET" && pathname.startsWith("/fixtures/result/")) {
+      const id = pathname.slice("/fixtures/result/".length);
+      if (!isNumericId(id)) {
+        return sendJson(res, 400, { error: "id must be numeric" });
+      }
+      const result = await getFixtureResult(id);
+      return sendJson(res, 200, result.payload, result.cache);
+    }
+
     if (req.method === "GET" && pathname.startsWith("/fixtures/multi/")) {
       const ids = pathname
         .slice("/fixtures/multi/".length)
@@ -61,15 +71,6 @@ async function handler(req, res) {
         return sendJson(res, 400, { error: "Provide 1-50 comma-separated fixture IDs" });
       }
       const result = await getFixturesMulti(ids);
-      return sendJson(res, 200, result.payload, result.cache);
-    }
-
-    if (req.method === "GET" && pathname.startsWith("/fixtures/result/")) {
-      const id = pathname.slice("/fixtures/result/".length);
-      if (!isNumericId(id)) {
-        return sendJson(res, 400, { error: "id must be numeric" });
-      }
-      const result = await getFixtureResult(id);
       return sendJson(res, 200, result.payload, result.cache);
     }
 
