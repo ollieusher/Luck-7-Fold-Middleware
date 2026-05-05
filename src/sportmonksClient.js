@@ -57,6 +57,14 @@ async function getFixturesMulti(ids) {
   );
 }
 
+async function getFixtureResult(id) {
+  return requestSportmonks(
+    `/football/fixtures/${id}`,
+    { include: "participants;scores;state" },
+    { ttlSeconds: 60 }
+  );
+}
+
 async function getValueBets(from, to) {
   const include = "participants;league;predictions.type;odds";
   const filters = "predictionTypes:33";
@@ -104,6 +112,7 @@ async function getLiveScores() {
 module.exports = {
   getFixturesByDate,
   getFixturesMulti,
+  getFixtureResult,
   getValueBets,
   getResultsByDate,
   getSchedulesByTeam,

@@ -4,6 +4,7 @@ const { config } = require("./config");
 const {
   getFixturesByDate,
   getFixturesMulti,
+  getFixtureResult,
   getValueBets,
   getResultsByDate,
   getSchedulesByTeam,
@@ -68,7 +69,7 @@ async function handler(req, res) {
       if (!isNumericId(fixtureId)) {
         return sendJson(res, 400, { error: "fixtureId must be numeric" });
       }
-      const result = await getFixturesMulti([fixtureId]);
+      const result = await getFixtureResult(fixtureId);
       return sendJson(res, 200, result.payload, result.cache);
     }
 
