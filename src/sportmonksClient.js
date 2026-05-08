@@ -23,7 +23,26 @@ async function requestSportmonks(path, query, cachePolicy) {
     if (cached) return { payload: cached, cache: "HIT", source: "cache" };
   }
 
-  const response = await fetch(url, { method: "GET" });
+  const controller = new AbortController();
+  const timeoutMs = Math.max(1, config.timeouts.sportmonksMs);
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(url, { method: "GET", signal: controller.signal });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      const timeoutError = new Error(`Sportmonks request timed out after ${timeoutMs}ms`);
+      timeoutError.status = 504;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+
   if (!response.ok) {
     const body = await response.text();
     const error = new Error(`Sportmonks error ${response.status}: ${body}`);

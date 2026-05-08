@@ -190,6 +190,9 @@ if (Number.isFinite(memoryLogIntervalMs) && memoryLogIntervalMs > 0) {
   timer.unref();
 }
 
+server.requestTimeout = Math.max(1000, config.timeouts.serverRequestMs);
+server.headersTimeout = Math.max(server.requestTimeout + 1000, config.timeouts.serverHeadersMs);
+
 process.on("unhandledRejection", (reason) => {
   logError("Unhandled promise rejection", reason);
 });
