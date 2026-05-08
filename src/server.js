@@ -12,6 +12,43 @@ const {
   getLiveScores
 } = require("./sportmonksClient");
 
+const memoryDebugEnabled = false;
+
+function logError(context, error) {
+  const err = error instanceof Error ? error : new Error(String(error));
+  process.stderr.write(
+    `[${new Date().toISOString()}] ${context}: ${err.message}\n${err.stack || ""}\n`
+  );
+}
+
+function formatMb(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function logMemoryUsage(context) {
+  const mem = process.memoryUsage();
+  process.stdout.write(
+    `[${new Date().toISOString()}] ${context} rss=${formatMb(mem.rss)} heapUsed=${formatMb(mem.heapUsed)} heapTotal=${formatMb(mem.heapTotal)} external=${formatMb(mem.external)} uptimeSec=${Math.round(process.uptime())}\n`
+  );
+}
+
+function getMemorySnapshot() {
+  const mem = process.memoryUsage();
+  return {
+    rssBytes: mem.rss,
+    heapUsedBytes: mem.heapUsed,
+    heapTotalBytes: mem.heapTotal,
+    externalBytes: mem.external,
+    arrayBuffersBytes: mem.arrayBuffers,
+    rssMb: formatMb(mem.rss),
+    heapUsedMb: formatMb(mem.heapUsed),
+    heapTotalMb: formatMb(mem.heapTotal),
+    externalMb: formatMb(mem.external),
+    uptimeSec: Math.round(process.uptime()),
+    timestamp: new Date().toISOString()
+  };
+}
+
 function sendJson(res, statusCode, payload, cacheStatus) {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json");
@@ -119,8 +156,16 @@ async function handler(req, res) {
       return sendJson(res, 200, result.payload, result.cache);
     }
 
+    if (req.method === "GET" && pathname === "/debug/memory") {
+      if (!memoryDebugEnabled) {
+        return sendJson(res, 404, { error: "Route not found" });
+      }
+      return sendJson(res, 200, { memory: getMemorySnapshot() });
+    }
+
     return sendJson(res, 404, { error: "Route not found" });
   } catch (error) {
+    logError(`Request failed: ${req.method} ${pathname}`, error);
     return sendJson(res, error.status || 500, {
       error: "Middleware request failed",
       message: error.message
@@ -136,8 +181,27 @@ if (!config.sportmonksToken) {
 }
 
 const server = http.createServer(handler);
+const memoryLogIntervalMs = Number(process.env.MEMORY_LOG_INTERVAL_MS || 0);
+
+if (Number.isFinite(memoryLogIntervalMs) && memoryLogIntervalMs > 0) {
+  const timer = setInterval(() => {
+    logMemoryUsage("Process memory");
+  }, memoryLogIntervalMs);
+  timer.unref();
+}
+
+process.on("unhandledRejection", (reason) => {
+  logError("Unhandled promise rejection", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  logError("Uncaught exception", error);
+  logMemoryUsage("Process memory at uncaughtException");
+  process.exit(1);
+});
 
 server.listen(config.port, () => {
+  logMemoryUsage("Process memory on startup");
   process.stdout.write(
     `Sportmonks middleware running on http://localhost:${config.port}\n`
   );
