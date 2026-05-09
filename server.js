@@ -14,7 +14,45 @@ if (!SPORTMONKS_TOKEN) {
   throw new Error("Missing SPORTMONKS_TOKEN environment variable.");
 }
 
-const cache = new NodeCache({ useClones: false, stdTTL: 0, checkperiod: 60 });
+/**
+ * Cap distinct cached API responses (each can be large). Default suits ~8GB RAM; lower CACHE_MAX_KEYS on small instances.
+ * Set CACHE_MAX_KEYS=-1 for unlimited (node-cache default; not recommended).
+ */
+const DEFAULT_CACHE_MAX_KEYS = 2048;
+
+function readCacheMaxKeys() {
+  const raw = process.env.CACHE_MAX_KEYS;
+  if (raw === undefined || raw === "") return DEFAULT_CACHE_MAX_KEYS;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return DEFAULT_CACHE_MAX_KEYS;
+  if (n < 0) return -1;
+  return Math.max(32, Math.floor(n));
+}
+
+const cacheMaxKeys = readCacheMaxKeys();
+const cache = new NodeCache({
+  useClones: false,
+  stdTTL: 0,
+  checkperiod: 60,
+  maxKeys: cacheMaxKeys
+});
+
+/** node-cache throws ECACHEFULL when full instead of evicting; drop ~20% of keys and retry. */
+function cacheSet(key, value, ttlSeconds) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      cache.set(key, value, ttlSeconds);
+      return;
+    } catch (err) {
+      if (!err || err.name !== "ECACHEFULL") throw err;
+      const keys = cache.keys();
+      if (keys.length === 0) throw err;
+      const drop = Math.max(1, Math.ceil(keys.length * 0.2));
+      for (let i = 0; i < drop; i++) cache.del(keys[i]);
+    }
+  }
+  cache.set(key, value, ttlSeconds);
+}
 
 const TTL_SECONDS = {
   fixturesByDate: 30 * 60,
@@ -73,7 +111,7 @@ async function fetchWithCache({ path, queryParams, ttlSeconds }) {
     throw error;
   }
 
-  cache.set(cacheKey, body, ttlSeconds);
+  cacheSet(cacheKey, body, ttlSeconds);
   return { statusCode: response.status, payload: body, cacheStatus: "MISS" };
 }
 
@@ -272,5 +310,9 @@ app.use((error, _req, res, _next) => {
 });
 
 app.listen(PORT, () => {
-  process.stdout.write(`Sportmonks middleware listening on port ${PORT}\n`);
+  const cap =
+    cacheMaxKeys < 0 ? "unlimited" : String(cacheMaxKeys);
+  process.stdout.write(
+    `Sportmonks middleware listening on port ${PORT} (CACHE_MAX_KEYS=${cap})\n`
+  );
 });
