@@ -5,8 +5,9 @@
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "node --max-old-space-size=6144 server.js",
+    "dev": "node --max-old-space-size=6144 --watch server.js",
+    "start:src": "node --max-old-space-size=6144 src/server.js"
   },
   "engines": {
     "node": ">=20"

@@ -18,7 +18,7 @@ if (!SPORTMONKS_TOKEN) {
  * Cap distinct cached API responses (each can be large). Default suits ~8GB RAM; lower CACHE_MAX_KEYS on small instances.
  * Set CACHE_MAX_KEYS=-1 for unlimited (node-cache default; not recommended).
  */
-const DEFAULT_CACHE_MAX_KEYS = 2048;
+const DEFAULT_CACHE_MAX_KEYS = 3072;
 
 function readCacheMaxKeys() {
   const raw = process.env.CACHE_MAX_KEYS;

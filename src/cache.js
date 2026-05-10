@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 /** Match server.js / Express defaults; override with CACHE_MAX_KEYS. -1 = unlimited. */
-const DEFAULT_CACHE_MAX_KEYS = 2048;
+const DEFAULT_CACHE_MAX_KEYS = 3072;
 
 function readCacheMaxEntries() {
   const raw = process.env.CACHE_MAX_KEYS;
@@ -13,10 +13,12 @@ function readCacheMaxEntries() {
   return Math.max(32, Math.floor(n));
 }
 
-/** 0 = disable periodic disk writes (avoids huge JSON.stringify spikes on ephemeral hosts). Set CACHE_DISK_MS=60000 to enable. */
+/** Default: persist every 60s. Set CACHE_DISK_MS=0 to disable (e.g. if disk snapshots cause memory spikes). */
+const DEFAULT_CACHE_DISK_MS = 60_000;
+
 function readPersistIntervalMs() {
   const raw = process.env.CACHE_DISK_MS;
-  if (raw === undefined || raw === "") return 0;
+  if (raw === undefined || raw === "") return DEFAULT_CACHE_DISK_MS;
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.floor(n);
