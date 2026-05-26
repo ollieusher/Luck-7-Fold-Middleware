@@ -58,6 +58,7 @@ const TTL_SECONDS = {
   fixturesByDate: 30 * 60,
   fixturesMulti: 12 * 60 * 60,
   fixturesBetween: 30 * 60,
+  tournamentFixtures: 30 * 60,
   teamSchedules: 24 * 60 * 60,
   headToHead: 24 * 60 * 60,
   results: 3 * 60,
@@ -233,6 +234,27 @@ app.get("/fixtures/between/:from/:to", async (req, res, next) => {
         per_page: 25
       },
       ttlSeconds: TTL_SECONDS.fixturesBetween
+    });
+    return sendProxyResponse(res, result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get("/tournament/fixtures/between/:from/:to", async (req, res, next) => {
+  const { from, to } = req.params;
+  if (!isIsoDate(from) || !isIsoDate(to)) {
+    return res.status(400).json({ error: "Invalid date format, expected YYYY-MM-DD" });
+  }
+
+  try {
+    const result = await fetchWithCache({
+      path: `/fixtures/between/${from}/${to}`,
+      queryParams: {
+        filters: "leagueIds:732",
+        include: "participants;league"
+      },
+      ttlSeconds: TTL_SECONDS.tournamentFixtures
     });
     return sendProxyResponse(res, result);
   } catch (error) {
