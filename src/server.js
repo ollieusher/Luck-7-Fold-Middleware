@@ -9,7 +9,8 @@ const {
   getResultsByDate,
   getSchedulesByTeam,
   getHeadToHead,
-  getLiveScores
+  getLiveScores,
+  getTournamentFixtures
 } = require("./sportmonksClient");
 
 const memoryDebugEnabled = false;
@@ -119,6 +120,17 @@ async function handler(req, res) {
         return sendJson(res, 400, { error: "Invalid date format, expected YYYY-MM-DD" });
       }
       const result = await getValueBets(from, to);
+      return sendJson(res, 200, result.payload, result.cache);
+    }
+
+    if (req.method === "GET" && pathname.startsWith("/tournament/fixtures/between/")) {
+      const parts = pathname.split("/");
+      const from = parts[4];
+      const to = parts[5];
+      if (!isIsoDate(from) || !isIsoDate(to)) {
+        return sendJson(res, 400, { error: "Invalid date format, expected YYYY-MM-DD" });
+      }
+      const result = await getTournamentFixtures(from, to);
       return sendJson(res, 200, result.payload, result.cache);
     }
 

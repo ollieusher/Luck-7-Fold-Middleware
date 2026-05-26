@@ -128,6 +128,17 @@ async function getLiveScores() {
   );
 }
 
+async function getTournamentFixtures(from, to) {
+  return requestSportmonks(
+    `/football/fixtures/between/${from}/${to}`,
+    {
+      filters: "leagueIds:732",
+      include: "participants;league"
+    },
+    { ttlSeconds: 1800 }
+  );
+}
+
 module.exports = {
   getFixturesByDate,
   getFixturesMulti,
@@ -136,5 +147,6 @@ module.exports = {
   getResultsByDate,
   getSchedulesByTeam,
   getHeadToHead,
-  getLiveScores
+  getLiveScores,
+  getTournamentFixtures
 };
