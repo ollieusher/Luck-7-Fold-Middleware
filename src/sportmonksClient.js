@@ -17,8 +17,9 @@ function buildUrl(path, query = {}) {
 async function requestSportmonks(path, query, cachePolicy) {
   const url = buildUrl(path, query);
   const cacheKey = `${path}?${new URL(url).searchParams.toString()}`;
+  const wantsCache = Boolean(cachePolicy);
 
-  if (cachePolicy && cachePolicy.ttlSeconds > 0) {
+  if (wantsCache) {
     const cached = cache.get(cacheKey);
     if (cached) return { payload: cached, cache: "HIT", source: "cache" };
   }
@@ -51,8 +52,14 @@ async function requestSportmonks(path, query, cachePolicy) {
   }
 
   const payload = await response.json();
-  if (cachePolicy && cachePolicy.ttlSeconds > 0) {
-    cache.set(cacheKey, payload, cachePolicy.ttlSeconds);
+  if (wantsCache) {
+    const ttlSeconds =
+      typeof cachePolicy.ttlSeconds === "function"
+        ? cachePolicy.ttlSeconds(payload)
+        : cachePolicy.ttlSeconds;
+    if (ttlSeconds > 0) {
+      cache.set(cacheKey, payload, ttlSeconds);
+    }
   }
 
   return { payload, cache: "MISS", source: "sportmonks" };
@@ -76,11 +83,18 @@ async function getFixturesMulti(ids) {
   );
 }
 
+function fixtureResultTtlSeconds(payload) {
+  const stateId = Number(payload?.data?.state_id ?? payload?.data?.state?.id);
+  if (stateId === 2 || stateId === 3 || stateId === 4) return 15; // live
+  if (stateId === 5) return 3600; // finished — results never change
+  return 300; // upcoming / anything else
+}
+
 async function getFixtureResult(id) {
   return requestSportmonks(
     `/football/fixtures/${id}`,
     { include: "participants;scores;state" },
-    { ttlSeconds: 60 }
+    { ttlSeconds: fixtureResultTtlSeconds }
   );
 }
 
