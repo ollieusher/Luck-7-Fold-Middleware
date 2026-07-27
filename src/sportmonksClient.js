@@ -66,7 +66,7 @@ async function requestSportmonks(path, query, cachePolicy) {
 }
 
 async function getFixturesByDate(date) {
-  const include = "participants;league;odds";
+  const include = "participants;league.country;odds";
   return requestSportmonks(
     `/football/fixtures/date/${date}`,
     { include, per_page: 50 },
@@ -92,7 +92,7 @@ async function getFixtureResult(id) {
 }
 
 async function getValueBets(from, to) {
-  const include = "participants;league;predictions.type;odds";
+  const include = "participants;league.country;predictions.type;odds";
   const filters = "predictionTypes:33";
   return requestSportmonks(
     `/football/fixtures/between/${from}/${to}`,
@@ -127,7 +127,7 @@ async function getHeadToHead(homeId, awayId) {
 }
 
 async function getLiveScores() {
-  const include = "participants;scores;league";
+  const include = "participants;scores;league.country";
   return requestSportmonks(
     `/football/livescores/inplay`,
     { include },
@@ -140,7 +140,7 @@ async function getTournamentFixtures(from, to) {
     `/football/fixtures/between/${from}/${to}`,
     {
       filters: "leagueIds:732",
-      include: "participants;league"
+      include: "participants;league.country"
     },
     { ttlSeconds: 1800 }
   );
