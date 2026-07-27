@@ -203,13 +203,6 @@ app.get("/fixtures/multi/:ids", async (req, res, next) => {
   }
 });
 
-function fixtureResultTtlSeconds(payload) {
-  const stateId = Number(payload?.data?.state_id ?? payload?.data?.state?.id);
-  if (stateId === 2 || stateId === 3 || stateId === 4) return 15; // live
-  if (stateId === 5) return 3600; // finished — results never change
-  return 300; // upcoming / anything else
-}
-
 app.get("/fixtures/result/:id", async (req, res, next) => {
   const { id } = req.params;
   if (!isNumericId(id)) {
@@ -222,7 +215,7 @@ app.get("/fixtures/result/:id", async (req, res, next) => {
       queryParams: {
         include: "participants;scores;state"
       },
-      ttlSeconds: fixtureResultTtlSeconds
+      ttlSeconds: 15
     });
     return sendProxyResponse(res, result);
   } catch (error) {

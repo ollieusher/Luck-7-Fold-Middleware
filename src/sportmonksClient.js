@@ -83,18 +83,11 @@ async function getFixturesMulti(ids) {
   );
 }
 
-function fixtureResultTtlSeconds(payload) {
-  const stateId = Number(payload?.data?.state_id ?? payload?.data?.state?.id);
-  if (stateId === 2 || stateId === 3 || stateId === 4) return 15; // live
-  if (stateId === 5) return 3600; // finished — results never change
-  return 300; // upcoming / anything else
-}
-
 async function getFixtureResult(id) {
   return requestSportmonks(
     `/football/fixtures/${id}`,
     { include: "participants;scores;state" },
-    { ttlSeconds: fixtureResultTtlSeconds }
+    { ttlSeconds: 15 }
   );
 }
 
