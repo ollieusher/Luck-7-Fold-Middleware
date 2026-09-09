@@ -54,6 +54,12 @@ function cacheSet(key, value, ttlSeconds) {
   cache.set(key, value, ttlSeconds);
 }
 
+/** Hard stop on pagination so a malformed has_more cannot spin forever. */
+const MAX_PAGINATED_PAGES = 10;
+
+/** A page failure leaves a truncated result; cache it briefly so it self-heals. */
+const PARTIAL_RESULT_TTL_SECONDS = 60;
+
 const TTL_SECONDS = {
   fixturesByDate: 30 * 60,
   fixturesMulti: 12 * 60 * 60,
@@ -87,14 +93,7 @@ function buildCacheKey(path, queryParams = {}) {
   return `${path}?${pairs.join("&")}`;
 }
 
-async function fetchWithCache({ path, queryParams, ttlSeconds }) {
-  const cacheKey = buildCacheKey(path, queryParams);
-  const cached = cache.get(cacheKey);
-
-  if (cached !== undefined) {
-    return { statusCode: 200, payload: cached, cacheStatus: "HIT" };
-  }
-
+async function fetchSportmonksPage(path, queryParams) {
   const url = buildSportmonksUrl(path, queryParams);
   const response = await fetch(url.toString(), { method: "GET" });
 
@@ -112,12 +111,91 @@ async function fetchWithCache({ path, queryParams, ttlSeconds }) {
     throw error;
   }
 
-  const resolvedTtl =
+  return { statusCode: response.status, body };
+}
+
+function hasMorePages(body) {
+  return Boolean(body && body.pagination && body.pagination.has_more);
+}
+
+/**
+ * Sportmonks returns fixtures sorted by kick-off, so a truncated first page hides the
+ * evening programme. Re-issue the same query with an incrementing page rather than
+ * following pagination.next_page, which comes back without the api_token.
+ */
+async function fetchAllPages(path, queryParams) {
+  const first = await fetchSportmonksPage(path, queryParams);
+  const firstBody = first.body;
+
+  if (!firstBody || typeof firstBody !== "object" || !Array.isArray(firstBody.data)) {
+    return { ...first, stoppedOnError: false };
+  }
+
+  const data = firstBody.data.slice();
+  let latestBody = firstBody;
+  let page = 1;
+  let stoppedOnError = false;
+
+  while (hasMorePages(latestBody) && page < MAX_PAGINATED_PAGES) {
+    page += 1;
+    let next;
+    try {
+      next = await fetchSportmonksPage(path, { ...queryParams, page });
+    } catch (error) {
+      // Keep the pages already assembled; latestBody still reports has_more, so the
+      // caller sees a result honestly marked as truncated rather than a failed request.
+      stoppedOnError = true;
+      process.stderr.write(
+        `Sportmonks page ${page} failed for ${path}: ${error.message}; ` +
+          `returning the ${data.length} records assembled so far\n`
+      );
+      break;
+    }
+    latestBody = next.body;
+    if (!latestBody || !Array.isArray(latestBody.data)) break;
+    data.push(...latestBody.data);
+  }
+
+  if (!stoppedOnError && hasMorePages(latestBody)) {
+    process.stderr.write(
+      `Sportmonks pagination cap of ${MAX_PAGINATED_PAGES} pages reached for ${path}; ` +
+        `returning ${data.length} records and dropping the remainder\n`
+    );
+  }
+
+  const pagination =
+    latestBody && latestBody.pagination
+      ? { ...latestBody.pagination, count: data.length }
+      : firstBody.pagination;
+
+  return {
+    statusCode: first.statusCode,
+    body: { ...firstBody, data, pagination },
+    stoppedOnError
+  };
+}
+
+async function fetchWithCache({ path, queryParams, ttlSeconds, paginate = false }) {
+  const cacheKey = buildCacheKey(path, queryParams);
+  const cached = cache.get(cacheKey);
+
+  if (cached !== undefined) {
+    return { statusCode: 200, payload: cached, cacheStatus: "HIT" };
+  }
+
+  const { statusCode, body, stoppedOnError = false } = paginate
+    ? await fetchAllPages(path, queryParams)
+    : await fetchSportmonksPage(path, queryParams);
+
+  let resolvedTtl =
     typeof ttlSeconds === "function" ? ttlSeconds(body) : ttlSeconds;
+  if (stoppedOnError) {
+    resolvedTtl = Math.min(resolvedTtl, PARTIAL_RESULT_TTL_SECONDS);
+  }
   if (resolvedTtl > 0) {
     cacheSet(cacheKey, body, resolvedTtl);
   }
-  return { statusCode: response.status, payload: body, cacheStatus: "MISS" };
+  return { statusCode, payload: body, cacheStatus: "MISS" };
 }
 
 function isIsoDate(value) {
@@ -174,6 +252,7 @@ app.get("/fixtures/date/:date", async (req, res, next) => {
         filters: "markets:1,2,14,80",
         per_page: 50
       },
+      paginate: true,
       ttlSeconds: TTL_SECONDS.fixturesByDate
     });
     return sendProxyResponse(res, result);
@@ -237,8 +316,9 @@ app.get("/fixtures/between/:from/:to", async (req, res, next) => {
       queryParams: {
         include: "participants;league.country;predictions.type",
         filters: "predictionTypes:33",
-        per_page: 25
+        per_page: 50
       },
+      paginate: true,
       ttlSeconds: TTL_SECONDS.fixturesBetween
     });
     return sendProxyResponse(res, result);
