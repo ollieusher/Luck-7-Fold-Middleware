@@ -248,8 +248,6 @@ app.get("/fixtures/date/:date", async (req, res, next) => {
     const result = await fetchWithCache({
       path: `/fixtures/date/${date}`,
       queryParams: {
-        include: "participants;league.country;odds",
-        filters: "markets:1,2,14,80",
         per_page: 50
       },
       paginate: true,

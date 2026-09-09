@@ -143,11 +143,9 @@ async function requestSportmonks(path, query, cachePolicy, options = {}) {
 }
 
 async function getFixturesByDate(date) {
-  const include = "participants;league.country;odds";
-  const filters = "markets:1,2,14,80";
   return requestSportmonks(
     `/football/fixtures/date/${date}`,
-    { include, filters, per_page: 50 },
+    { per_page: 50 },
     { ttlSeconds: config.cacheTtls.fixtureCore },
     { paginate: true }
   );
