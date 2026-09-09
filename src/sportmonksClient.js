@@ -67,18 +67,20 @@ async function requestSportmonks(path, query, cachePolicy) {
 
 async function getFixturesByDate(date) {
   const include = "participants;league.country;odds";
+  const filters = "markets:1,2,14,80";
   return requestSportmonks(
     `/football/fixtures/date/${date}`,
-    { include, per_page: 50 },
+    { include, filters, per_page: 50 },
     { ttlSeconds: config.cacheTtls.fixtureCore }
   );
 }
 
 async function getFixturesMulti(ids) {
   const include = "participants;scores;state";
+  const filters = "markets:1,2,14,80";
   return requestSportmonks(
     `/football/fixtures/multi/${ids.join(",")}`,
-    { include, per_page: 50 },
+    { include, filters, per_page: 50 },
     { ttlSeconds: 60 }
   );
 }
@@ -92,7 +94,7 @@ async function getFixtureResult(id) {
 }
 
 async function getValueBets(from, to) {
-  const include = "participants;league.country;predictions.type;odds";
+  const include = "participants;league.country;predictions.type";
   const filters = "predictionTypes:33";
   return requestSportmonks(
     `/football/fixtures/between/${from}/${to}`,

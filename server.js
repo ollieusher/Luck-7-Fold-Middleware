@@ -171,6 +171,7 @@ app.get("/fixtures/date/:date", async (req, res, next) => {
       path: `/fixtures/date/${date}`,
       queryParams: {
         include: "participants;league.country;odds",
+        filters: "markets:1,2,14,80",
         per_page: 50
       },
       ttlSeconds: TTL_SECONDS.fixturesByDate
@@ -193,6 +194,7 @@ app.get("/fixtures/multi/:ids", async (req, res, next) => {
       path: `/fixtures/multi/${ids.join(",")}`,
       queryParams: {
         include: "participants;league.country;predictions.type;odds",
+        filters: "markets:1,2,14,80",
         per_page: 50
       },
       ttlSeconds: TTL_SECONDS.fixturesMulti
@@ -233,7 +235,7 @@ app.get("/fixtures/between/:from/:to", async (req, res, next) => {
     const result = await fetchWithCache({
       path: `/fixtures/between/${from}/${to}`,
       queryParams: {
-        include: "participants;league.country;predictions.type;odds",
+        include: "participants;league.country;predictions.type",
         filters: "predictionTypes:33",
         per_page: 25
       },
