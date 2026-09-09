@@ -60,6 +60,10 @@ const MAX_PAGINATED_PAGES = 10;
 /** A page failure leaves a truncated result; cache it briefly so it self-heals. */
 const PARTIAL_RESULT_TTL_SECONDS = 60;
 
+/** Sportmonks caps /fixtures/multi at 50 ids, so larger requests are split and merged. */
+const MULTI_CHUNK_SIZE = 50;
+const MAX_MULTI_IDS = 250;
+
 const TTL_SECONDS = {
   fixturesByDate: 30 * 60,
   fixturesMulti: 12 * 60 * 60,
@@ -198,6 +202,70 @@ async function fetchWithCache({ path, queryParams, ttlSeconds, paginate = false 
   return { statusCode, payload: body, cacheStatus: "MISS" };
 }
 
+function chunkList(items, size) {
+  const groups = [];
+  for (let i = 0; i < items.length; i += size) {
+    groups.push(items.slice(i, i + size));
+  }
+  return groups;
+}
+
+/** Restore the caller's id order; Sportmonks orders each chunk however it likes. */
+function orderByRequestedIds(records, ids) {
+  const position = new Map(ids.map((id, index) => [String(id), index]));
+  return records
+    .map((record, index) => ({ record, index }))
+    .sort((a, b) => {
+      const aPos = position.has(String(a.record && a.record.id))
+        ? position.get(String(a.record.id))
+        : Number.MAX_SAFE_INTEGER;
+      const bPos = position.has(String(b.record && b.record.id))
+        ? position.get(String(b.record.id))
+        : Number.MAX_SAFE_INTEGER;
+      return aPos === bPos ? a.index - b.index : aPos - bPos;
+    })
+    .map((entry) => entry.record);
+}
+
+/**
+ * Requests ids in chunks of MULTI_CHUNK_SIZE and merges them into one response, cached
+ * under the key for the whole id list so the app still sees a single { data: [...] }.
+ */
+async function fetchChunkedWithCache({ ids, buildPath, queryParams, ttlSeconds }) {
+  const cacheKey = buildCacheKey(buildPath(ids), queryParams);
+  const cached = cache.get(cacheKey);
+
+  if (cached !== undefined) {
+    return { statusCode: 200, payload: cached, cacheStatus: "HIT" };
+  }
+
+  const groups = chunkList(ids, MULTI_CHUNK_SIZE);
+  const merged = [];
+  let firstBody = null;
+  let statusCode = 200;
+
+  for (const group of groups) {
+    const result = await fetchSportmonksPage(buildPath(group), queryParams);
+    if (firstBody === null) {
+      firstBody = result.body;
+      statusCode = result.statusCode;
+    }
+    if (result.body && Array.isArray(result.body.data)) {
+      merged.push(...result.body.data);
+    }
+  }
+
+  const base = firstBody && typeof firstBody === "object" ? firstBody : {};
+  const body = { ...base, data: orderByRequestedIds(merged, ids) };
+
+  const resolvedTtl =
+    typeof ttlSeconds === "function" ? ttlSeconds(body) : ttlSeconds;
+  if (resolvedTtl > 0) {
+    cacheSet(cacheKey, body, resolvedTtl);
+  }
+  return { statusCode, payload: body, cacheStatus: "MISS" };
+}
+
 function isIsoDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -262,13 +330,16 @@ app.get("/fixtures/date/:date", async (req, res, next) => {
 app.get("/fixtures/multi/:ids", async (req, res, next) => {
   const ids = validateIds(req.params.ids);
 
-  if (ids.length === 0 || ids.length > 50) {
-    return res.status(400).json({ error: "Provide 1-50 comma-separated fixture IDs" });
+  if (ids.length === 0 || ids.length > MAX_MULTI_IDS) {
+    return res
+      .status(400)
+      .json({ error: `Provide 1-${MAX_MULTI_IDS} comma-separated fixture IDs` });
   }
 
   try {
-    const result = await fetchWithCache({
-      path: `/fixtures/multi/${ids.join(",")}`,
+    const result = await fetchChunkedWithCache({
+      ids,
+      buildPath: (group) => `/fixtures/multi/${group.join(",")}`,
       queryParams: {
         include: "participants;league.country;predictions.type;odds",
         filters: "markets:1,2,14,80",

@@ -15,6 +15,9 @@ const {
 
 const memoryDebugEnabled = false;
 
+/** Chunked server-side into groups of 50; see requestChunked in sportmonksClient. */
+const MAX_MULTI_IDS = 250;
+
 function logError(context, error) {
   const err = error instanceof Error ? error : new Error(String(error));
   process.stderr.write(
@@ -105,8 +108,10 @@ async function handler(req, res) {
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
-      if (ids.length === 0 || ids.length > 50) {
-        return sendJson(res, 400, { error: "Provide 1-50 comma-separated fixture IDs" });
+      if (ids.length === 0 || ids.length > MAX_MULTI_IDS) {
+        return sendJson(res, 400, {
+          error: `Provide 1-${MAX_MULTI_IDS} comma-separated fixture IDs`
+        });
       }
       const result = await getFixturesMulti(ids);
       return sendJson(res, 200, result.payload, result.cache);
