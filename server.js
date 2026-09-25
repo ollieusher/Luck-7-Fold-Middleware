@@ -383,7 +383,8 @@ app.get("/fixtures/multi/:ids", async (req, res, next) => {
  * status "confirmed" | "projected" | "none", both sides' XI and, once confirmed, bench.
  */
 app.get("/fixtures/teamsheets/:ids", async (req, res, next) => {
-  const ids = validateIds(req.params.ids);
+  // Sportmonks rejects a request that repeats an id, so drop duplicates first.
+  const ids = [...new Set(validateIds(req.params.ids))];
   if (ids.length === 0 || ids.length > v16.MAX_TEAMSHEET_IDS || !ids.every(isNumericId)) {
     return res
       .status(400)

@@ -1,3 +1,5 @@
+const { find: findTimeZone } = require("geo-tz");
+
 /**
  * v1.6 response shaping.
  *
@@ -19,8 +21,8 @@ function isDebugFull(req) {
 const ODD_FIELDS = "market_id,label,value,total,latest_bookmaker_update";
 
 const MULTI_INCLUDE =
-  `participants;league.country;predictions.type;odds:${ODD_FIELDS};weatherReport`;
-const MULTI_INCLUDE_DEBUG = "participants;league.country;predictions.type;odds;weatherReport";
+  `participants;league.country;predictions.type;odds:${ODD_FIELDS};weatherReport;venue`;
+const MULTI_INCLUDE_DEBUG = "participants;league.country;predictions.type;odds;weatherReport;venue";
 const TEAMSHEET_INCLUDE = "participants;predictedLineups;lineups;metadata";
 
 /** Held picks only, so never more than a slip's worth. */
@@ -177,11 +179,42 @@ function shapeOdds(fixture, stats) {
   });
 }
 
+/**
+ * The stadium's IANA time zone from its coordinates, e.g. "Europe/Madrid".
+ *
+ * The weather report's morning / day / evening / night temperatures are local
+ * to the ground, and the app shows kick-off in the *user's* time zone, so
+ * without this a 20:00 kick-off in Madrid read as 19:00 to a UK user would
+ * highlight the wrong part of the day. geo-tz uses real boundaries: coarser
+ * lookups put Ceuta in Morocco's zone, an hour out in summer.
+ */
+function venueTimeZone(fixture) {
+  const v = fixture && fixture.venue;
+  const lat = v ? Number(v.latitude) : NaN;
+  const lon = v ? Number(v.longitude) : NaN;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || (lat === 0 && lon === 0)) return null;
+  try {
+    const zones = findTimeZone(lat, lon);
+    return Array.isArray(zones) && zones.length ? zones[0] : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Applied to the merged /fixtures/multi body before it is cached. */
 function transformMulti(body) {
   if (!body || !Array.isArray(body.data)) return body;
-  const stats = { dcRecovered: 0, dcDropped: 0, staleDropped: 0 };
-  const data = body.data.map((f) => (f && Array.isArray(f.odds) ? { ...f, odds: shapeOdds(f, stats) } : f));
+  const stats = { dcRecovered: 0, dcDropped: 0, staleDropped: 0, venueTimeZones: 0 };
+  const data = body.data.map((f) => {
+    if (!f) return f;
+    const out = Array.isArray(f.odds) ? { ...f, odds: shapeOdds(f, stats) } : { ...f };
+    const tz = venueTimeZone(f);
+    if (tz) {
+      out.venue_timezone = tz;
+      stats.venueTimeZones++;
+    }
+    return out;
+  });
   return { ...body, data, v16: { shape: "v16", staleHours: staleHours(), ...stats } };
 }
 
@@ -322,6 +355,7 @@ module.exports = {
   MULTI_TTL_SECONDS,
   filterDateFixtures,
   resolveDoubleChance,
+  venueTimeZone,
   transformMulti,
   buildTeamsheet,
   transformTeamsheets,
