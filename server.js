@@ -1,6 +1,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const NodeCache = require("node-cache");
+const v16 = require("./v16");
 
 dotenv.config();
 
@@ -104,6 +105,7 @@ async function fetchSportmonksPage(path, queryParams) {
   const contentType = response.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
   const body = isJson ? await response.json() : await response.text();
+  v16.noteRateLimit(body);
 
   if (!response.ok) {
     const error = new Error("Sportmonks request failed");
@@ -231,7 +233,7 @@ function orderByRequestedIds(records, ids) {
  * Requests ids in chunks of MULTI_CHUNK_SIZE and merges them into one response, cached
  * under the key for the whole id list so the app still sees a single { data: [...] }.
  */
-async function fetchChunkedWithCache({ ids, buildPath, queryParams, ttlSeconds }) {
+async function fetchChunkedWithCache({ ids, buildPath, queryParams, ttlSeconds, transform }) {
   const cacheKey = buildCacheKey(buildPath(ids), queryParams);
   const cached = cache.get(cacheKey);
 
@@ -256,7 +258,9 @@ async function fetchChunkedWithCache({ ids, buildPath, queryParams, ttlSeconds }
   }
 
   const base = firstBody && typeof firstBody === "object" ? firstBody : {};
-  const body = { ...base, data: orderByRequestedIds(merged, ids) };
+  const assembled = { ...base, data: orderByRequestedIds(merged, ids) };
+  // v1.6 only: reshape before caching so the work is done once per cache fill.
+  const body = typeof transform === "function" ? transform(assembled) : assembled;
 
   const resolvedTtl =
     typeof ttlSeconds === "function" ? ttlSeconds(body) : ttlSeconds;
@@ -288,7 +292,7 @@ function isNumericId(value) {
 }
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
+  res.json({ status: "ok", rateLimit: v16.rateLimitSnapshot() });
 });
 
 app.get("/livescores", async (_req, res, next) => {
@@ -321,6 +325,10 @@ app.get("/fixtures/date/:date", async (req, res, next) => {
       paginate: true,
       ttlSeconds: TTL_SECONDS.fixturesByDate
     });
+    if (v16.isV16(req)) {
+      // Cached body is shared with v1.5; filterDateFixtures returns a copy.
+      return sendProxyResponse(res, { ...result, payload: v16.filterDateFixtures(result.payload) });
+    }
     return sendProxyResponse(res, result);
   } catch (error) {
     return next(error);
@@ -337,6 +345,23 @@ app.get("/fixtures/multi/:ids", async (req, res, next) => {
   }
 
   try {
+    if (v16.isV16(req)) {
+      const debug = v16.isDebugFull(req);
+      const result = await fetchChunkedWithCache({
+        ids,
+        buildPath: (group) => `/fixtures/multi/${group.join(",")}`,
+        queryParams: {
+          include: debug ? v16.MULTI_INCLUDE_DEBUG : v16.MULTI_INCLUDE,
+          filters: "markets:1,2,14,80",
+          per_page: 50
+        },
+        ttlSeconds: v16.MULTI_TTL_SECONDS,
+        transform: debug ? undefined : v16.transformMulti
+      });
+      return sendProxyResponse(res, result);
+    }
+
+    // v1.5 path — unchanged.
     const result = await fetchChunkedWithCache({
       ids,
       buildPath: (group) => `/fixtures/multi/${group.join(",")}`,
@@ -346,6 +371,32 @@ app.get("/fixtures/multi/:ids", async (req, res, next) => {
         per_page: 50
       },
       ttlSeconds: TTL_SECONDS.fixturesMulti
+    });
+    return sendProxyResponse(res, result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * v1.6 team sheets for held picks (max 7). Returns one compact sheet per fixture:
+ * status "confirmed" | "projected" | "none", both sides' XI and, once confirmed, bench.
+ */
+app.get("/fixtures/teamsheets/:ids", async (req, res, next) => {
+  const ids = validateIds(req.params.ids);
+  if (ids.length === 0 || ids.length > v16.MAX_TEAMSHEET_IDS || !ids.every(isNumericId)) {
+    return res
+      .status(400)
+      .json({ error: `Provide 1-${v16.MAX_TEAMSHEET_IDS} comma-separated numeric fixture IDs` });
+  }
+
+  try {
+    const result = await fetchChunkedWithCache({
+      ids,
+      buildPath: (group) => `/fixtures/multi/${group.join(",")}`,
+      queryParams: { include: v16.TEAMSHEET_INCLUDE },
+      ttlSeconds: v16.teamsheetTtl,
+      transform: v16.transformTeamsheets
     });
     return sendProxyResponse(res, result);
   } catch (error) {
