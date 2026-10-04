@@ -295,6 +295,50 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", rateLimit: v16.rateLimitSnapshot() });
 });
 
+// Access codes: free unlocks for app-store reviewers and testers (Android,
+// from build 6). Set ACCESS_CODES on Railway to a comma-separated list. With
+// the variable empty or missing, no code is valid. Change or clear it at any
+// time; the app re-checks a saved code each time it opens.
+function accessCodes() {
+  return (process.env.ACCESS_CODES || "")
+    .split(",")
+    .map((code) => code.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+// Guessing is limited to 10 tries per address in any 10 minutes. After that
+// every answer is 429 until the window passes, right code or not.
+const ACCESS_WINDOW_MS = 10 * 60 * 1000;
+const ACCESS_MAX_TRIES = 10;
+const accessTries = new Map();
+
+function accessCaller(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwarded || req.socket.remoteAddress || "unknown";
+}
+
+app.get("/access/:code", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const now = Date.now();
+  if (accessTries.size > 5000) {
+    for (const [who, entry] of accessTries) {
+      if (now - entry.start > ACCESS_WINDOW_MS) accessTries.delete(who);
+    }
+  }
+  const who = accessCaller(req);
+  let entry = accessTries.get(who);
+  if (!entry || now - entry.start > ACCESS_WINDOW_MS) {
+    entry = { start: now, count: 0 };
+    accessTries.set(who, entry);
+  }
+  entry.count += 1;
+  if (entry.count > ACCESS_MAX_TRIES) {
+    return res.status(429).json({ error: "Too many attempts. Try again later." });
+  }
+  const code = String(req.params.code || "").trim().toUpperCase();
+  return res.json({ valid: code.length >= 8 && accessCodes().includes(code) });
+});
+
 app.get("/livescores", async (_req, res, next) => {
   try {
     const result = await fetchWithCache({
